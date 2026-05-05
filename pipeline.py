@@ -1,12 +1,14 @@
 from agents import build_search_agent, build_reader_agent, writer_chain, critic_chain
 
-def run_research_pipeline(topic : str) -> dict:
+
+def run_research_pipeline(topic: str, verbose: bool = True) -> dict:
     state = {}
 
     # Step 1 - Search Agent Working
-    print("\n" + "="*50)
-    print("Step 1: Search Agent Gathering Information")
-    print("="*50)
+    if verbose:
+        print("\n" + "=" * 50)
+        print("Step 1: Search Agent Gathering Information")
+        print("=" * 50)
 
     search_agent = build_search_agent()
     search_result = search_agent.invoke({
@@ -15,12 +17,14 @@ def run_research_pipeline(topic : str) -> dict:
 
     state["search_result"] = search_result['messages'][-1].content
 
-    print("\n Search Result:",state["search_result"])
+    if verbose:
+        print("\n Search Result:", state["search_result"])
 
     # Step 2 - Reader Agent Working
-    print("\n" + "="*50)
-    print("Step 2: Reader Agent Analyzing Information")
-    print("="*50)
+    if verbose:
+        print("\n" + "=" * 50)
+        print("Step 2: Reader Agent Analyzing Information")
+        print("=" * 50)
 
     reader_agent = build_reader_agent()
     reader_result = reader_agent.invoke({
@@ -33,12 +37,14 @@ def run_research_pipeline(topic : str) -> dict:
 
     state['scraped_content'] = reader_result['messages'][-1].content
 
-    print("\n Scraped Content:",state["scraped_content"])
+    if verbose:
+        print("\n Scraped Content:", state["scraped_content"])
 
     # Step 3 - Writer Agent Working
-    print("\n" + "="*50)
-    print("Step 3: Writer Agent Creating Content")
-    print("="*50)
+    if verbose:
+        print("\n" + "=" * 50)
+        print("Step 3: Writer Agent Creating Content")
+        print("=" * 50)
 
     research_combined = (
         f"SEARCH RESULTS : \n{state['search_result']}\n\n"
@@ -50,18 +56,21 @@ def run_research_pipeline(topic : str) -> dict:
         "research": research_combined
     })
 
-    print("\n Final Report\n",state["report"])
+    if verbose:
+        print("\n Final Report\n", state["report"])
 
     # Step 4 - Critic Agent Working
-    print("\n" + "="*50)
-    print("Step 4: Critic Agent Evaluating Content")
-    print("="*50)
+    if verbose:
+        print("\n" + "=" * 50)
+        print("Step 4: Critic Agent Evaluating Content")
+        print("=" * 50)
 
     state["feedback"] = critic_chain.invoke({
          "report" : state["report"]
     })
 
-    print("\n Critic Feedback\n",state["feedback"])
+    if verbose:
+        print("\n Critic Feedback\n", state["feedback"])
 
     return state
 
