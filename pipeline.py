@@ -27,7 +27,7 @@ def run_research_pipeline(topic : str) -> dict:
         "messages": [("user",
             f"Based on the following search results about '{topic}', "
             f"pick the most relevant URL and scrape it for deeper content.\n\n"
-            f"Search Results:\n{state['search_results'][:800]}"
+            f"Search Results:\n{state['search_result'][:800]}"
         )]
     })
 
@@ -64,3 +64,7 @@ def run_research_pipeline(topic : str) -> dict:
     print("\n Critic Feedback\n",state["feedback"])
 
     return state
+
+if __name__ == "__main__":
+    topic = input("\n Enter a research topic : ")
+    run_research_pipeline(topic)
