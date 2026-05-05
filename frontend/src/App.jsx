@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import SectionCard from "./components/SectionCard";
@@ -23,36 +23,21 @@ function App() {
   const [result, setResult] = useState(null);
   const [steps, setSteps] = useState(baseSteps);
 
-  useEffect(() => {
-    if (!loading) {
-      return undefined;
+  const downloadReport = (format) => {
+    if (!result?.report) {
+      return;
     }
-
-    let current = 0;
-    setSteps((prev) =>
-      prev.map((step, idx) => ({
-        ...step,
-        status: idx === 0 ? "running" : "pending",
-      }))
-    );
-
-    const timer = setInterval(() => {
-      current += 1;
-      setSteps((prev) =>
-        prev.map((step, idx) => {
-          if (idx < current) {
-            return { ...step, status: "done" };
-          }
-          if (idx === current) {
-            return { ...step, status: "running" };
-          }
-          return { ...step, status: "pending" };
-        })
-      );
-    }, 2200);
-
-    return () => clearInterval(timer);
-  }, [loading]);
+    const content = result.report;
+    const blob = new Blob([content], { type: format === "md" ? "text/markdown;charset=utf-8" : "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `research-report.${format}`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
+  };
 
   const runResearch = async (event) => {
     event.preventDefault();
@@ -68,20 +53,39 @@ function App() {
     setSteps(baseSteps);
 
     try {
-      const response = await fetch(`${API_BASE}/api/research`, {
+      const startResponse = await fetch(`${API_BASE}/api/research/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ topic: topic.trim() }),
       });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.detail || "Something went wrong while running the pipeline.");
+      const startData = await startResponse.json();
+      if (!startResponse.ok) {
+        throw new Error(startData.detail || "Could not start the pipeline.");
       }
 
-      setResult(data);
-      setSteps((prev) => prev.map((step) => ({ ...step, status: "done" })));
+      const { job_id: jobId } = startData;
+      let finalData = null;
+
+      while (true) {
+        await new Promise((resolve) => setTimeout(resolve, 1200));
+        const statusResponse = await fetch(`${API_BASE}/api/research/${jobId}`);
+        const statusData = await statusResponse.json();
+        if (!statusResponse.ok) {
+          throw new Error(statusData.detail || "Could not fetch pipeline status.");
+        }
+
+        setSteps(statusData.steps || baseSteps);
+
+        if (statusData.status === "done") {
+          finalData = statusData;
+          break;
+        }
+        if (statusData.status === "error") {
+          throw new Error(statusData.error || "Pipeline failed.");
+        }
+      }
+
+      setResult({ topic: finalData.topic, report: finalData.report });
     } catch (err) {
       setError(err.message || "Unable to reach backend.");
       setSteps(baseSteps);
@@ -123,6 +127,22 @@ function App() {
 
       {result && (
         <div className="animate-floatIn">
+          <div className="mb-4 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => downloadReport("md")}
+              className="rounded-lg bg-teal px-4 py-2 text-xs font-bold uppercase tracking-wide text-white transition hover:bg-teal/90"
+            >
+              Download .md
+            </button>
+            <button
+              type="button"
+              onClick={() => downloadReport("txt")}
+              className="rounded-lg bg-ink px-4 py-2 text-xs font-bold uppercase tracking-wide text-paper transition hover:bg-ink/90"
+            >
+              Download .txt
+            </button>
+          </div>
           <SectionCard title="Final Report" accent="bg-ink">
             <article className="prose prose-stone max-w-none prose-headings:font-display prose-headings:font-extrabold prose-h1:text-3xl prose-h2:text-2xl prose-h3:text-xl prose-p:text-[15px] prose-p:leading-7 prose-strong:text-ink prose-strong:font-extrabold prose-li:my-1 prose-a:font-bold prose-a:text-teal prose-a:underline prose-a:decoration-2 prose-a:underline-offset-4 hover:prose-a:text-ember">
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{result.report}</ReactMarkdown>
