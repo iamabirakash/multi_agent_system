@@ -1,6 +1,10 @@
+import { isValidElement } from "react";
+
 const SectionCard = ({ title, accent, children }) => {
   const content =
-    typeof children === "string"
+    isValidElement(children)
+      ? children
+      : typeof children === "string"
       ? children
       : children == null
       ? ""
@@ -14,7 +18,7 @@ const SectionCard = ({ title, accent, children }) => {
         <span className={`h-2.5 w-2.5 rounded-full ${accent}`} />
         <h3 className="font-display text-lg font-bold text-ink">{title}</h3>
       </div>
-      <div className="text-sm leading-7 text-ink/90 whitespace-pre-wrap">{content}</div>
+      <div className="text-sm leading-7 text-ink/90">{content}</div>
     </section>
   );
 };
