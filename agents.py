@@ -42,7 +42,7 @@ Always produce long-form output unless data is insufficient."""),
      - Use markdown headings and subheadings.
      - Include a strong Introduction with context and scope.
      - Include at least 5 Key Findings with detailed explanation.
-     - For each finding, include:
+     - For each finding, only if necessary include:
        - What happened / what it means
        - Why it matters
        - Risks, trade-offs, or uncertainty
