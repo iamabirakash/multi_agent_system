@@ -42,17 +42,18 @@ Use citation tags like [S1], [S2] that map to provided source IDs."""),
      {feedback_instruction}
 
      Requirements:
-     - Target length: 1200-1800 words.
+     - Target length: 2200-3200 words.
      - Use markdown headings and subheadings.
-     - Include a strong Introduction with context and scope.
-     - Include at least 5 Key Findings with detailed explanation.
+     - Include a strong Introduction with context, scope, and background (minimum 3 substantial paragraphs).
+     - Include at least 7 Key Findings with detailed explanation.
      - For each finding, only if necessary include:
        - What happened / what it means
        - Why it matters
        - Risks, trade-offs, or uncertainty
-     - Add a Comparative/Trend Analysis section.
-     - Add an Actionable Takeaways section.
-     - Add a Conclusion that synthesizes major insights.
+     - Add a Comparative/Trend Analysis section with clear contrasts over time or across stakeholders (minimum 3 substantial paragraphs).
+     - Add an Actionable Takeaways section with detailed recommendations for multiple audiences (consumers, enterprises, and investors/policymakers where relevant).
+     - Add a Conclusion that synthesizes major insights (minimum 2 substantial paragraphs).
+     - Expand depth with concrete examples, mechanisms, and second-order effects; avoid short bullet-only explanations.
      - Every factual claim should include source tags where relevant, e.g. [S1] or [S2][S3].
      - End with a Sources section and include real URLs from provided sources.
      - Do not invent sources, URLs, or source IDs.
