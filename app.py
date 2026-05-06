@@ -8,6 +8,7 @@ import threading
 import uuid
 import asyncio
 import re
+import os
 from io import BytesIO
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
@@ -23,9 +24,12 @@ class ResearchRequest(BaseModel):
 
 app = FastAPI(title="Multi Agent Research API", version="1.0.0")
 
+cors_origins_env = os.getenv("CORS_ORIGINS", "http://localhost:5173")
+ALLOWED_ORIGINS = [origin.strip() for origin in cors_origins_env.split(",") if origin.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
