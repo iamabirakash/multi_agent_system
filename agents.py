@@ -37,6 +37,9 @@ Always produce long-form output unless data is insufficient."""),
      Topic: {topic}
      Research Gathered:
      {research}
+     
+     {feedback_instruction}
+
      Requirements:
      - Target length: 1200-1800 words.
      - Use markdown headings and subheadings.
@@ -76,3 +79,13 @@ critic_prompt = ChatPromptTemplate.from_messages([
 ])
 
 critic_chain = critic_prompt | llm | StrOutputParser()
+
+def extract_critic_score(feedback: str) -> float:
+    import re
+    match = re.search(r"Score:\s*([\d.]+)", feedback, re.IGNORECASE)
+    if match:
+        try:
+            return float(match.group(1))
+        except ValueError:
+            pass
+    return 10.0  # default to pass if we can't parse
