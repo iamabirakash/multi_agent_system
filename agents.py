@@ -9,7 +9,7 @@ load_dotenv()
 
 #model setup for the llm using gemini-2.0-flash for cost efficiency and good performance, with temperature 0 for deterministic responses
 llm = ChatGoogleGenerativeAI(
-    model="gemini-3.1-flash-lite-preview",
+    model="gemini-1.5-flash",
     temperature=0,
     max_output_tokens=4096,
 )
