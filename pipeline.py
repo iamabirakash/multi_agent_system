@@ -1,16 +1,97 @@
 from typing import TypedDict, Callable, Optional, Any
+import re
+from urllib.parse import urlparse
 from langgraph.graph import StateGraph, END
-from agents import build_search_agent, build_reader_agent, writer_chain, critic_chain, extract_critic_score
+from agents import build_search_agent, writer_chain, critic_chain, extract_critic_score
+from tools import scrape_url
 
 class AgentState(TypedDict):
     topic: str
     search_result: str
     scraped_content: str
+    selected_sources: str
     report: str
     feedback: str
     revision_count: int
     verbose: bool
     progress_callback: Optional[Callable[[str, str], None]]
+
+
+def _to_text(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        parts = [_to_text(v) for v in value]
+        return "\n".join([p for p in parts if p]).strip()
+    if isinstance(value, dict):
+        if "text" in value and isinstance(value["text"], str):
+            return value["text"]
+        if "content" in value:
+            return _to_text(value["content"])
+    return str(value)
+
+
+def _parse_search_results(raw: str) -> list[dict]:
+    raw_text = _to_text(raw)
+    pattern = re.compile(
+        r"Title:\s*(?P<title>.*?)\nURL:\s*(?P<url>.*?)\nSnippet:\s*(?P<snippet>.*?)(?:\n{2,}|\Z)",
+        re.DOTALL,
+    )
+    items: list[dict] = []
+    for match in pattern.finditer(raw_text):
+        title = match.group("title").strip()
+        url = match.group("url").strip()
+        snippet = match.group("snippet").strip()
+        if not url.startswith("http"):
+            continue
+        items.append({"title": title, "url": url, "snippet": snippet})
+    return items
+
+
+def _source_score(source: dict, topic: str) -> float:
+    title = (source.get("title") or "").lower()
+    snippet = (source.get("snippet") or "").lower()
+    url = (source.get("url") or "").lower()
+
+    topic_terms = [t for t in re.findall(r"[a-z0-9]+", topic.lower()) if len(t) > 2]
+    combined = f"{title} {snippet}"
+
+    relevance_hits = sum(1 for term in topic_terms if term in combined)
+    relevance_score = min(relevance_hits / max(len(topic_terms), 1), 1.0) * 70
+
+    credibility_score = 10
+    trusted_domains = (
+        ".gov",
+        ".edu",
+        "reuters.com",
+        "apnews.com",
+        "bbc.com",
+        "nature.com",
+        "who.int",
+        "worldbank.org",
+        "oecd.org",
+    )
+    if any(d in url for d in trusted_domains):
+        credibility_score = 30
+
+    return round(relevance_score + credibility_score, 2)
+
+
+def _rank_sources(raw: str, topic: str, limit: int = 4) -> list[dict]:
+    parsed = _parse_search_results(raw)
+    for item in parsed:
+        item["score"] = _source_score(item, topic)
+    parsed.sort(key=lambda x: x.get("score", 0), reverse=True)
+    return parsed[:limit]
+
+
+def _domain_from_url(url: str) -> str:
+    try:
+        return urlparse(url).netloc or url
+    except Exception:
+        return url
 
 def search_node(state: AgentState):
     if state.get("progress_callback"):
@@ -20,7 +101,7 @@ def search_node(state: AgentState):
         "messages": [("user", f"Find recent and reliable information on the topic: {state['topic']}")]
     })
     
-    result = search_result['messages'][-1].content
+    result = _to_text(search_result['messages'][-1].content)
     if state.get("progress_callback"):
         state["progress_callback"]("search", "done")
         
@@ -32,20 +113,34 @@ def search_node(state: AgentState):
 def reader_node(state: AgentState):
     if state.get("progress_callback"):
         state["progress_callback"]("reader", "running")
-    reader_agent = build_reader_agent()
-    reader_result = reader_agent.invoke({
-        "messages": [("user",
-            f"Based on the following search results about '{state['topic']}', "
-            f"pick the most relevant URL and scrape it for deeper content.\n\n"
-            f"Search Results:\n{state['search_result']}"
-        )]
-    })
-    
-    content = reader_result['messages'][-1].content
+
+    top_sources = _rank_sources(state["search_result"], state["topic"], limit=4)
+    source_blocks: list[str] = []
+    scraped_blocks: list[str] = []
+
+    for idx, src in enumerate(top_sources, start=1):
+        source_id = f"S{idx}"
+        title = src.get("title") or "Untitled"
+        url = src.get("url") or ""
+        score = src.get("score", 0)
+        snippet = src.get("snippet") or ""
+
+        source_blocks.append(
+            f"[{source_id}] {title}\nURL: {url}\nDomain: {_domain_from_url(url)}\nScore: {score}\nSnippet: {snippet}"
+        )
+
+        scraped_text = _to_text(scrape_url.invoke({"url": url}))
+        scraped_blocks.append(
+            f"[{source_id}] URL: {url}\nTitle: {title}\nScraped Content:\n{scraped_text}"
+        )
+
+    selected_sources_text = "\n\n".join(source_blocks)
+    content = "\n\n".join(scraped_blocks)
+
     if state.get("progress_callback"):
         state["progress_callback"]("reader", "done")
-        
-    return {"scraped_content": content}
+
+    return {"scraped_content": content, "selected_sources": selected_sources_text}
 
 def writer_node(state: AgentState):
     if state.get("progress_callback"):
@@ -53,6 +148,7 @@ def writer_node(state: AgentState):
         
     research_combined = (
         f"SEARCH RESULTS : \n{state['search_result']}\n\n"
+        f"SCORED SELECTED SOURCES : \n{state.get('selected_sources', '')}\n\n"
         f"DETAILED SCRAPED CONTENT : \n{state['scraped_content']}"
     )
     
@@ -136,6 +232,7 @@ def run_research_pipeline(topic: str, verbose: bool = True, progress_callback=No
         "topic": topic,
         "search_result": "",
         "scraped_content": "",
+        "selected_sources": "",
         "report": "",
         "feedback": "",
         "revision_count": 0,

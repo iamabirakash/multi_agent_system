@@ -32,7 +32,8 @@ def build_reader_agent():
 writer_prompt = ChatPromptTemplate.from_messages([
     ("system","""You are an expert research writer.
 Write deep, structured, and insight-rich reports with strong factual grounding.
-Always produce long-form output unless data is insufficient."""),
+Always produce long-form output unless data is insufficient.
+Use citation tags like [S1], [S2] that map to provided source IDs."""),
     ("human","""Write a detailed research report on the topic below.
      Topic: {topic}
      Research Gathered:
@@ -52,7 +53,9 @@ Always produce long-form output unless data is insufficient."""),
      - Add a Comparative/Trend Analysis section.
      - Add an Actionable Takeaways section.
      - Add a Conclusion that synthesizes major insights.
-     - End with a Sources section and include all URLs used.
+     - Every factual claim should include source tags where relevant, e.g. [S1] or [S2][S3].
+     - End with a Sources section and include real URLs from provided sources.
+     - Do not invent sources, URLs, or source IDs.
      - Keep tone factual, professional, and specific; avoid vague generic statements.""")
 ])
 
