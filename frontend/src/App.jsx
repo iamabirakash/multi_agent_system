@@ -23,14 +23,18 @@ function App() {
   const [result, setResult] = useState(null);
   const [steps, setSteps] = useState(baseSteps);
 
-  const downloadReport = (format) => {
-    if (!result?.report) return;
-    const content = result.report;
-    const blob = new Blob([content], { type: format === "md" ? "text/markdown;charset=utf-8" : "text/plain;charset=utf-8" });
+  const downloadReport = async (format) => {
+    if (!result?.jobId) return;
+    const response = await fetch(`${API_BASE}/api/research/${result.jobId}/export/${format}`);
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.detail || "Could not export report.");
+    }
+    const blob = await response.blob();
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `research-report.${format}`;
+    anchor.download = `${result.topic || "research-report"}.${format}`;
     document.body.appendChild(anchor);
     anchor.click();
     document.body.removeChild(anchor);
@@ -83,7 +87,7 @@ function App() {
         }
       }
 
-      setResult({ topic: finalData.topic, report: finalData.report });
+      setResult({ jobId, topic: finalData.topic, report: finalData.report });
     } catch (err) {
       setError(err.message || "Unable to reach backend.");
       setSteps(baseSteps);
@@ -159,7 +163,7 @@ function App() {
           <div className="mb-6 flex flex-wrap gap-3">
             <button
               type="button"
-              onClick={() => downloadReport("md")}
+              onClick={() => downloadReport("md").catch((e) => setError(e.message))}
               className="glass-button-secondary rounded-lg px-5 py-2.5 text-xs font-bold uppercase tracking-wider flex items-center gap-2"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
@@ -167,11 +171,27 @@ function App() {
             </button>
             <button
               type="button"
-              onClick={() => downloadReport("txt")}
+              onClick={() => downloadReport("txt").catch((e) => setError(e.message))}
               className="glass-button-secondary rounded-lg px-5 py-2.5 text-xs font-bold uppercase tracking-wider flex items-center gap-2"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
               Save as .txt
+            </button>
+            <button
+              type="button"
+              onClick={() => downloadReport("pdf").catch((e) => setError(e.message))}
+              className="glass-button-secondary rounded-lg px-5 py-2.5 text-xs font-bold uppercase tracking-wider flex items-center gap-2"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 4h18v16H3z"></path><path d="m8 10 2 2-2 2"></path><path d="M13 14h3"></path></svg>
+              Save as .pdf
+            </button>
+            <button
+              type="button"
+              onClick={() => downloadReport("docx").catch((e) => setError(e.message))}
+              className="glass-button-secondary rounded-lg px-5 py-2.5 text-xs font-bold uppercase tracking-wider flex items-center gap-2"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><path d="M9 15l1.5-3L12 15l1.5-3L15 15"></path></svg>
+              Save as .docx
             </button>
           </div>
           

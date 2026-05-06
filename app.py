@@ -1,12 +1,18 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, Response
 from pydantic import BaseModel, Field
 from typing import Any
 import json
 import threading
 import uuid
 import asyncio
+import re
+from io import BytesIO
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
+from reportlab.lib.units import mm
+from docx import Document
 
 from pipeline import run_research_pipeline
 
@@ -51,6 +57,12 @@ def _to_text(value: Any) -> str:
         except Exception:
             return str(value)
     return str(value)
+
+
+def _slugify_filename(value: str) -> str:
+    clean = re.sub(r"[^a-zA-Z0-9\s_-]", "", value or "").strip().lower()
+    clean = re.sub(r"[\s_-]+", "-", clean)
+    return clean[:80] or "research-report"
 
 
 STEP_LABELS = {
@@ -184,5 +196,84 @@ async def stream_research_status(job_id: str):
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@app.get("/api/research/{job_id}/export/{fmt}")
+def export_research_report(job_id: str, fmt: str):
+    allowed_formats = {"txt", "md", "pdf", "docx"}
+    if fmt not in allowed_formats:
+        raise HTTPException(status_code=400, detail=f"Unsupported format. Use one of: {', '.join(sorted(allowed_formats))}")
+
+    with JOBS_LOCK:
+        job = JOBS.get(job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found.")
+        if job.get("status") != "done":
+            raise HTTPException(status_code=400, detail="Research job is not complete yet.")
+        report = _to_text(job.get("report", ""))
+        topic = _to_text(job.get("topic", ""))
+
+    if not report.strip():
+        raise HTTPException(status_code=400, detail="No report available to export.")
+
+    filename_base = _slugify_filename(topic)
+
+    if fmt == "txt":
+        content = report
+        media_type = "text/plain; charset=utf-8"
+    elif fmt == "md":
+        content = report
+        media_type = "text/markdown; charset=utf-8"
+    elif fmt == "pdf":
+        buffer = BytesIO()
+        pdf = canvas.Canvas(buffer, pagesize=A4)
+        width, height = A4
+        margin = 18 * mm
+        y = height - margin
+
+        pdf.setFont("Helvetica-Bold", 14)
+        pdf.drawString(margin, y, topic or "Research Report")
+        y -= 12 * mm
+
+        pdf.setFont("Helvetica", 10)
+        max_chars = 105
+        for paragraph in report.splitlines():
+            line = paragraph.strip()
+            if not line:
+                y -= 5 * mm
+                if y < margin:
+                    pdf.showPage()
+                    pdf.setFont("Helvetica", 10)
+                    y = height - margin
+                continue
+            chunks = [line[i:i + max_chars] for i in range(0, len(line), max_chars)]
+            for chunk in chunks:
+                pdf.drawString(margin, y, chunk)
+                y -= 5 * mm
+                if y < margin:
+                    pdf.showPage()
+                    pdf.setFont("Helvetica", 10)
+                    y = height - margin
+
+        pdf.save()
+        content = buffer.getvalue()
+        media_type = "application/pdf"
+    else:
+        document = Document()
+        document.add_heading(topic or "Research Report", 0)
+        for paragraph in report.splitlines():
+            document.add_paragraph(paragraph)
+        buffer = BytesIO()
+        document.save(buffer)
+        content = buffer.getvalue()
+        media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={
+            "Content-Disposition": f"attachment; filename={filename_base}.{fmt}"
         },
     )
