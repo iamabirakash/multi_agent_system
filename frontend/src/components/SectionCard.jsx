@@ -1,6 +1,6 @@
 import { isValidElement } from "react";
 
-const SectionCard = ({ title, accent, children }) => {
+const SectionCard = ({ title, accentClass = "bg-primary", children }) => {
   const content =
     isValidElement(children)
       ? children
@@ -13,12 +13,12 @@ const SectionCard = ({ title, accent, children }) => {
       : String(children);
 
   return (
-    <section className="glass animate-floatIn rounded-2xl border border-white/60 p-5 shadow-card md:p-6">
-      <div className="mb-4 flex items-center gap-3">
-        <span className={`h-2.5 w-2.5 rounded-full ${accent}`} />
-        <h3 className="font-display text-lg font-bold text-ink">{title}</h3>
+    <section className="glass-panel animate-floatIn rounded-2xl p-6 md:p-8">
+      <div className="mb-6 flex items-center gap-4 border-b border-white/10 pb-4">
+        <div className={`h-3 w-3 rounded-full shadow-[0_0_8px_currentColor] ${accentClass}`} />
+        <h3 className="font-display text-xl font-bold tracking-wide text-textMain">{title}</h3>
       </div>
-      <div className="text-sm leading-7 text-ink/90">{content}</div>
+      <div className="text-[15px] leading-relaxed text-textMuted">{content}</div>
     </section>
   );
 };
