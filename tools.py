@@ -5,7 +5,6 @@ from tavily import TavilyClient
 import os
 import logging
 from dotenv import load_dotenv
-from rich import print
 load_dotenv()
 
 logging.basicConfig(
@@ -33,8 +32,6 @@ def web_search(query : str) -> str:
 
     logger.info("web_search_completed", extra={"query": query, "result_count": len(out)})
     return "\n".join(out)
-
-# print(web_search.invoke("What are the recent news of war?"))
 
 @tool
 def scrape_url(url : str) -> str:

@@ -1,10 +1,12 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from typing import Any
 import json
 import threading
 import uuid
+import asyncio
 
 from pipeline import run_research_pipeline
 
@@ -132,3 +134,55 @@ def get_research_status(job_id: str) -> dict:
             "report": job["report"],
             "error": job["error"],
         }
+
+
+@app.get("/api/research/{job_id}/stream")
+async def stream_research_status(job_id: str):
+    with JOBS_LOCK:
+        if job_id not in JOBS:
+            raise HTTPException(status_code=404, detail="Job not found.")
+
+    async def event_generator():
+        last_payload = ""
+
+        while True:
+            with JOBS_LOCK:
+                job = JOBS.get(job_id)
+                if not job:
+                    payload = {
+                        "job_id": job_id,
+                        "status": "error",
+                        "error": "Job not found.",
+                    }
+                    is_terminal = True
+                else:
+                    payload = {
+                        "job_id": job["job_id"],
+                        "topic": job["topic"],
+                        "status": job["status"],
+                        "steps": job["steps"],
+                        "report": job["report"],
+                        "error": job["error"],
+                    }
+                    is_terminal = job["status"] in ("done", "error")
+
+            payload_text = json.dumps(payload, ensure_ascii=False)
+            if payload_text != last_payload:
+                yield f"event: update\ndata: {payload_text}\n\n"
+                last_payload = payload_text
+
+            if is_terminal:
+                yield "event: end\ndata: {}\n\n"
+                break
+
+            await asyncio.sleep(0.5)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )

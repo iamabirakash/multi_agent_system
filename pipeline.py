@@ -1,9 +1,12 @@
 from typing import TypedDict, Callable, Optional, Any
 import re
+import logging
 from urllib.parse import urlparse
 from langgraph.graph import StateGraph, END
 from agents import build_search_agent, writer_chain, critic_chain, extract_critic_score
 from tools import scrape_url
+
+logger = logging.getLogger(__name__)
 
 class AgentState(TypedDict):
     topic: str
@@ -94,6 +97,7 @@ def _domain_from_url(url: str) -> str:
         return url
 
 def search_node(state: AgentState):
+    logger.info("pipeline_search_started", extra={"topic": state.get("topic", "")})
     if state.get("progress_callback"):
         state["progress_callback"]("search", "running")
     search_agent = build_search_agent()
@@ -104,13 +108,14 @@ def search_node(state: AgentState):
     result = _to_text(search_result['messages'][-1].content)
     if state.get("progress_callback"):
         state["progress_callback"]("search", "done")
-        
+
     if state.get("verbose"):
-        print("\n Search Result:", result)
+        logger.info("pipeline_search_result", extra={"topic": state.get("topic", ""), "chars": len(result)})
         
     return {"search_result": result}
 
 def reader_node(state: AgentState):
+    logger.info("pipeline_reader_started", extra={"topic": state.get("topic", "")})
     if state.get("progress_callback"):
         state["progress_callback"]("reader", "running")
 
@@ -136,6 +141,7 @@ def reader_node(state: AgentState):
 
     selected_sources_text = "\n\n".join(source_blocks)
     content = "\n\n".join(scraped_blocks)
+    logger.info("pipeline_reader_completed", extra={"selected_source_count": len(top_sources), "scraped_chars": len(content)})
 
     if state.get("progress_callback"):
         state["progress_callback"]("reader", "done")
@@ -143,6 +149,7 @@ def reader_node(state: AgentState):
     return {"scraped_content": content, "selected_sources": selected_sources_text}
 
 def writer_node(state: AgentState):
+    logger.info("pipeline_writer_started", extra={"topic": state.get("topic", ""), "revision_count": state.get("revision_count", 0)})
     if state.get("progress_callback"):
         state["progress_callback"]("writer", "running")
         
@@ -164,14 +171,15 @@ def writer_node(state: AgentState):
     
     if state.get("progress_callback"):
         state["progress_callback"]("writer", "done")
-        
+
     if state.get("verbose"):
-        print(f"\n Final Report (Revision {state.get('revision_count', 0)})\n", report)
+        logger.info("pipeline_writer_completed", extra={"revision_count": state.get("revision_count", 0), "report_chars": len(_to_text(report))})
         
     new_revision_count = state.get("revision_count", 0) + 1
     return {"report": report, "revision_count": new_revision_count}
 
 def critic_node(state: AgentState):
+    logger.info("pipeline_critic_started", extra={"revision_count": state.get("revision_count", 0)})
     if state.get("progress_callback"):
         # Reset writer and critic status to pending/running for the frontend
         state["progress_callback"]("critic", "running")
@@ -182,16 +190,15 @@ def critic_node(state: AgentState):
     
     if state.get("progress_callback"):
         state["progress_callback"]("critic", "done")
-        
+
     if state.get("verbose"):
-        print("\n Critic Feedback\n", feedback)
+        logger.info("pipeline_critic_feedback", extra={"feedback_chars": len(_to_text(feedback))})
         
     return {"feedback": feedback}
 
 def should_continue(state: AgentState):
     score = extract_critic_score(state["feedback"])
-    if state.get("verbose"):
-        print(f"\n -> Critic Score extracted: {score}")
+    logger.info("pipeline_critic_score", extra={"score": score, "revision_count": state.get("revision_count", 0)})
         
     # Max revisions = 2 (Writer runs max 3 times)
     if score >= 8.0 or state.get("revision_count", 0) > 2:
@@ -228,6 +235,7 @@ workflow.add_conditional_edges(
 app_workflow = workflow.compile()
 
 def run_research_pipeline(topic: str, verbose: bool = True, progress_callback=None) -> dict:
+    logger.info("pipeline_started", extra={"topic": topic})
     initial_state = {
         "topic": topic,
         "search_result": "",
@@ -241,10 +249,11 @@ def run_research_pipeline(topic: str, verbose: bool = True, progress_callback=No
     }
     
     final_state = app_workflow.invoke(initial_state)
+    logger.info("pipeline_completed", extra={"topic": topic, "final_revision_count": final_state.get("revision_count", 0)})
     return final_state
 
 if __name__ == "__main__":
     topic = input("\n Enter a research topic : ")
     def dummy_progress(step, status):
-        print(f"[{step}] -> {status}")
+        logger.info("pipeline_progress", extra={"step": step, "status": status})
     run_research_pipeline(topic, verbose=True, progress_callback=dummy_progress)
