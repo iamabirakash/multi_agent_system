@@ -4,12 +4,16 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from tools import web_search, scrape_url
 from dotenv import load_dotenv
+import os
 
 load_dotenv()
 
-#model setup for the llm using gemini-2.0-flash for cost efficiency and good performance, with temperature 0 for deterministic responses
+# Use an env-driven model so deployment changes do not require code edits.
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash-lite")
+
+# model setup for the llm using a Gemini Flash variant for cost efficiency and latency
 llm = ChatGoogleGenerativeAI(
-    model="gemini-1.5-flash",
+    model=GEMINI_MODEL,
     temperature=0,
     max_output_tokens=4096,
 )
